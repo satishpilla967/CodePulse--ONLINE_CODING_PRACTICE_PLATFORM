@@ -1,0 +1,4 @@
+* @Patina-Network/codepulse
+
+CODEOWNERS @Patina-Network/admin
+.github/ @Patina-Network/cicd

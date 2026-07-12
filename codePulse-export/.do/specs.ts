@@ -1,0 +1,136 @@
+import type {
+  App_service_spec,
+  App_spec,
+  Apps_image_source_spec,
+  App_variable_definition,
+} from "../.github/scripts/node_modules/@digitalocean/dots";
+
+const DIGITALOCEAN_BASE_IMAGE: Apps_image_source_spec = {
+  registry: "tahminator",
+  registryType: "DOCKER_HUB",
+  repository: "codepulse",
+  // override tag
+  tag: "latest",
+};
+
+const DIGITALOCEAN_BASE_SERVICE: App_service_spec = {
+  name: "codepulse",
+  healthCheck: {
+    failureThreshold: 9,
+    httpPath: "/api",
+    periodSeconds: 10,
+    successThreshold: 1,
+    timeoutSeconds: 1,
+  },
+  livenessHealthCheck: {
+    failureThreshold: 9,
+    httpPath: "/api",
+    periodSeconds: 10,
+    successThreshold: 1,
+    timeoutSeconds: 1,
+  },
+  httpPort: 8080,
+  instanceCount: 1,
+  instanceSizeSlug: "apps-s-1vcpu-1gb-fixed",
+};
+
+const DIGITALOCEAN_BASE_SPEC: App_spec = {
+  region: "nyc",
+  ingress: {
+    rules: [
+      {
+        component: {
+          name: "codepulse",
+        },
+        match: {
+          path: {
+            prefix: "/",
+          },
+        },
+      },
+    ],
+  },
+};
+
+export function prodSpec(
+  envs: App_variable_definition[],
+  openSearchUsername: string,
+  openSearchPassword: string,
+): App_spec {
+  return {
+    ...DIGITALOCEAN_BASE_SPEC,
+    name: "codepulse-prod",
+    maintenance: {
+      enabled: true,
+    },
+    services: [
+      {
+        ...DIGITALOCEAN_BASE_SERVICE,
+        image: {
+          ...DIGITALOCEAN_BASE_IMAGE,
+          tag: "latest",
+        },
+        envs,
+        logDestinations: [
+          {
+            name: "prod-logs",
+            openSearch: {
+              endpoint: "https://opensearch.tahmid.io:443",
+              basicAuth: {
+                user: openSearchUsername,
+                password: openSearchPassword,
+              },
+              indexName: "codepulse.patinanetwork.org",
+            },
+          },
+        ],
+      },
+    ],
+    domains: [
+      {
+        domain: "codepulse.patinanetwork.org",
+        type: "PRIMARY",
+      },
+    ],
+  };
+}
+
+export function stgSpec(
+  envs: App_variable_definition[],
+  openSearchUsername: string,
+  openSearchPassword: string,
+): App_spec {
+  return {
+    ...DIGITALOCEAN_BASE_SPEC,
+    name: "codepulse-staging",
+    services: [
+      {
+        ...DIGITALOCEAN_BASE_SERVICE,
+        image: {
+          ...DIGITALOCEAN_BASE_IMAGE,
+          tag: "staging-latest",
+        },
+        envs,
+        logDestinations: [
+          {
+            name: "staging-logs",
+            openSearch: {
+              endpoint: "https://opensearch.tahmid.io:443",
+              basicAuth: {
+                user: openSearchUsername,
+                password: openSearchPassword,
+              },
+              indexName: "stg.codepulse.patinanetwork.org",
+            },
+          },
+        ],
+      },
+    ],
+    domains: [
+      {
+        domain: "stg.codepulse.patinanetwork.org",
+        type: "PRIMARY",
+      },
+    ],
+  };
+}

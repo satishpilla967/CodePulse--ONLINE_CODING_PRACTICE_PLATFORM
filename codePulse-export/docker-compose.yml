@@ -1,0 +1,154 @@
+services:
+  mysql:
+    image: mysql:8
+    container_name: codepulse-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DATABASE_PASSWORD:-mysql}
+      MYSQL_DATABASE: ${DATABASE_NAME:-codepulse}
+      MYSQL_USER: ${DATABASE_USER:-codepulse}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD:-mysql}
+    ports:
+      - "${DATABASE_PORT:-3306}:3306"
+    volumes:
+      - codepulse-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${DATABASE_PASSWORD:-mysql}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # ---------------------------------------------------------------------------------------------
+  # Judge0 CE (local dev only). Judge0 needs its own dedicated Postgres + Redis internally
+  # regardless of the host app's DB — these are isolated in their own containers below and are
+  # NOT the same as the app's MySQL or the app's jedis Redis, to avoid coupling Judge0 internals
+  # to app cache/pubsub behavior. Production Judge0 deployment is a separate ops decision; see
+  # infra/README.md.
+  # ---------------------------------------------------------------------------------------------
+  judge0-db:
+    image: postgres:16
+    container_name: codepulse-judge0-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0
+      POSTGRES_DB: judge0
+    volumes:
+      - codepulse-judge0-db-data:/var/lib/postgresql/data
+
+  judge0-redis:
+    image: redis:7
+    container_name: codepulse-judge0-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "no"]
+
+  judge0-server:
+    image: judge0/judge0:1.13.1
+    container_name: codepulse-judge0-server
+    restart: unless-stopped
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    ports:
+      - "${JUDGE0_PORT:-2358}:2358"
+    environment:
+      REDIS_HOST: judge0-redis
+      POSTGRES_HOST: judge0-db
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0
+    privileged: true
+
+  judge0-workers:
+    image: judge0/judge0:1.13.1
+    container_name: codepulse-judge0-workers
+    restart: unless-stopped
+    command: ["./scripts/workers"]
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    environment:
+      REDIS_HOST: judge0-redis
+      POSTGRES_HOST: judge0-db
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0
+    privileged: true
+
+  # The app's own Redis (jedis), used for pub/sub (see A3) and caching — kept separate from
+  # Judge0's internal Redis above.
+  redis:
+    image: redis:7
+    container_name: codepulse-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  # -----------------------------------------------------------------------------------------------
+  # Everything below is behind the "full" Compose profile and is NOT started by a plain
+  # `docker compose up` (which `dev.sh`/`dev.ps1` both call to bring up just the infra before running
+  # the backend/frontend natively via mvnw/pnpm). Opt in explicitly with:
+  #   docker compose --profile full up -d --build
+  # See infra/README.md for the all-in-one setup this enables.
+  # -----------------------------------------------------------------------------------------------
+
+  # One-shot Flyway migration runner. The app's own flyway-core/flyway-mysql dependencies are
+  # `provided` scope (build-time only, excluded from the runtime jar on purpose — see pom.xml),
+  # so the packaged app image cannot self-migrate. This uses the official Flyway CLI image
+  # instead, pointed at ./db/migration, and exits once migrations are applied; the `app` service
+  # below waits for it to complete successfully before starting.
+  flyway:
+    image: flyway/flyway:11
+    container_name: codepulse-flyway
+    profiles: ["full"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: >
+      -url=jdbc:mysql://mysql:3306/${DATABASE_NAME:-codepulse}
+      -user=${DATABASE_USER:-codepulse}
+      -password=${DATABASE_PASSWORD:-mysql}
+      -locations=filesystem:/flyway/sql
+      -connectRetries=10
+      migrate
+    volumes:
+      - ./db/migration:/flyway/sql
+    restart: "no"
+
+  # The full app (Spring Boot backend + the built frontend served as static resources from the
+  # same jar/image — see infra/Dockerfile) in a single container. Local dev only; production
+  # deployment is a separate ops decision.
+  app:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+    container_name: codepulse-app
+    profiles: ["full"]
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      judge0-server:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      # Override the localhost-based defaults from .env so the app reaches the other
+      # containers by their compose service name instead.
+      DATABASE_HOST: mysql
+      DATABASE_PORT: "3306"
+      REDIS_URL: redis://redis:6379
+      JUDGE0_BASE_URL: http://judge0-server:2358
+      # No separate Vite dev server in this all-in-one setup — the app serves the built
+      # frontend itself on the same origin.
+      SERVER_URL: http://localhost:8080
+    ports:
+      - "8080:8080"
+
+volumes:
+  codepulse-mysql-data:
+  codepulse-judge0-db-data:

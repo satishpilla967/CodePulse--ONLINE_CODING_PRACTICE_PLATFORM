@@ -1,0 +1,43 @@
+package org.patinanetwork.codepulse.common.db.repos.question.topic;
+
+import java.util.List;
+import java.util.Optional;
+import org.patinanetwork.codepulse.common.db.models.question.topic.LeetcodeTopicEnum;
+import org.patinanetwork.codepulse.common.db.models.question.topic.QuestionTopic;
+
+public interface QuestionTopicRepository {
+
+    List<QuestionTopic> findQuestionTopicsByQuestionId(String questionId);
+
+    List<QuestionTopic> findQuestionTopicsByQuestionBankId(String questionBankId);
+
+    Optional<QuestionTopic> findQuestionTopicById(String id);
+
+    Optional<QuestionTopic> findQuestionTopicByQuestionIdAndTopicEnum(String questionId, LeetcodeTopicEnum topicEnum);
+
+    /**
+     * @note - The provided object's methods will be overridden with any returned data from the database.
+     * @param questionTopic - required fields:
+     *     <ul>
+     *       <li>questionId
+     *       <li>topicTag
+     *       <li>topic
+     *       <li>topicSlug
+     *     </ul>
+     */
+    void createQuestionTopic(QuestionTopic questionTopic);
+
+    /**
+     * @note - The provided object's methods will be overridden with any returned data from the database.
+     * @param questionTopic - overridden fields:
+     *     <ul>
+     *       <li>questionId
+     *       <li>topicTag
+     *       <li>topic
+     *       <li>topicSlug
+     *     </ul>
+     */
+    boolean updateQuestionTopicById(QuestionTopic questionTopic);
+
+    boolean deleteQuestionTopicById(String id);
+}

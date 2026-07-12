@@ -1,0 +1,32 @@
+package org.patinanetwork.codepulse.common.db.models;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+import org.patinanetwork.codepulse.common.db.helper.annotations.NotNullColumn;
+
+@Getter
+@Setter
+@Builder
+@EqualsAndHashCode
+@ToString
+public class Session {
+
+    @Builder.Default
+    private Optional<String> id = Optional.empty();
+
+    @NotNullColumn
+    private String userId;
+
+    @NotNullColumn
+    private LocalDateTime expiresAt;
+
+    // public Session(final String userId, final LocalDateTime expiresAt) {
+    // this.userId = userId;
+    // this.expiresAt = expiresAt;
+    // }
+}

@@ -1,0 +1,123 @@
+spring:
+  application:
+    name: codepulse
+
+  datasource:
+    url: jdbc:mysql://${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}?sessionVariables=sql_mode='ANSI_QUOTES'
+    username: ${DATABASE_USER}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  flyway:
+    enabled: false
+
+  threads:
+    virtual:
+      enabled: true
+
+  main:
+    keep-alive: true
+
+  mvc:
+    async:
+      request-timeout: PT3H
+
+  web:
+    resources:
+      add-mappings: true
+      cache:
+        cachecontrol:
+          max-age: 30m
+          public: true
+
+springdoc:
+  swagger-ui:
+    enabled: ${ENABLE_DOCUMENTATION}
+  api-docs:
+    enabled: ${ENABLE_DOCUMENTATION}
+    version: OPENAPI_3_0
+
+codepulse:
+  email:
+    host: ${CODEPULSE_EMAIL_HOST}
+    port: ${CODEPULSE_EMAIL_PORT}
+    type: ${CODEPULSE_EMAIL_TYPE}
+    username: ${CODEPULSE_EMAIL_USERNAME}
+    password: ${CODEPULSE_EMAIL_PASSWORD}
+  scheduling:
+    enabled: true
+  notify:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus, health
+  endpoint:
+    prometheus:
+      enabled: true
+
+security:
+  actuator:
+    username: ${ACTUATOR_USERNAME}
+    password: ${ACTUATOR_PASSWORD}
+
+secret:
+  key: ${SECRET_KEY}
+
+server:
+  url: ${SERVER_URL}
+
+app:
+  commit:
+    sha: "@commit.sha@"
+
+jedis:
+  url: ${REDIS_URL}
+
+judge0:
+  base-url: ${JUDGE0_BASE_URL:http://localhost:2358}
+  api-key: ${JUDGE0_API_KEY:}
+  polling-interval-seconds: ${JUDGE0_POLL_INTERVAL_SECONDS:5}
+
+ff:
+  duels: true
+  user-metrics: false
+
+resilience4j:
+  retry:
+    instances:
+      leetcodePotdClient:
+        max-attempts: 3
+        wait-duration: 2s
+        enable-exponential-backoff: true
+      judge0Client:
+        max-attempts: 3
+        wait-duration: 1s
+        enable-exponential-backoff: true
+
+  circuitbreaker:
+    instances:
+      leetcodePotdClient:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+      judge0Client:
+        # A single "Run Code" request polls getSubmission up to 20 times in a tight loop, all sharing
+        # this one circuit breaker instance. A small, count-based window (previously 10/5) meant a couple
+        # of transient blips within one request's poll burst could trip the breaker for every other user
+        # for 30s. Widened so occasional blips don't dominate the window, and shortened the open-state
+        # wait so the app recovers faster if it does trip.
+        sliding-window-size: 50
+        minimum-number-of-calls: 20
+        failure-rate-threshold: 60
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 5

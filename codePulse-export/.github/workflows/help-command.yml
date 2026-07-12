@@ -1,0 +1,28 @@
+name: PR Help Comment
+run-name: PR Help Comment
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  prHelpComment:
+    name: PR Help Comment
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Help Comment
+        uses: actions/checkout@v6
+
+      - name: Setup CI
+        uses: ./.github/composite/setup-ci
+        with:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Run script
+        shell: bash
+        run: bun run .github/scripts/help-message --pr-id=${{ github.event.pull_request.number }}

@@ -1,0 +1,14 @@
+package org.patinanetwork.codepulse.common.reporter.report.location;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
+@AllArgsConstructor
+@Getter
+public enum Location {
+    BACKEND("Backend"),
+    FRONTEND("Frontend"),
+    UNKNOWN("Unknown");
+
+    private final String resolvedName;
+}

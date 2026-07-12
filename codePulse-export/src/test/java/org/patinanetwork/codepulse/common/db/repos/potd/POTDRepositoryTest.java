@@ -1,0 +1,89 @@
+package org.patinanetwork.codepulse.common.db.repos.potd;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.patinanetwork.codepulse.common.db.models.potd.POTD;
+import org.patinanetwork.codepulse.common.db.repos.BaseRepositoryTest;
+import org.patinanetwork.codepulse.common.time.StandardizedLocalDateTime;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+public class POTDRepositoryTest extends BaseRepositoryTest {
+
+    @Autowired
+    private POTDRepository potdRepository;
+
+    private POTD testPOTD;
+
+    @BeforeEach
+    void setup() {
+        POTD potd = POTD.builder()
+                .title("Test Title")
+                .slug("test-title")
+                .multiplier(2.0f)
+                .createdAt(StandardizedLocalDateTime.now())
+                .build();
+        testPOTD = potdRepository.createPOTD(potd);
+    }
+
+    @AfterEach
+    void deleteTestPOTD() {
+        if (testPOTD != null && testPOTD.getId() != null) {
+            potdRepository.deletePOTD(testPOTD.getId());
+        }
+    }
+
+    @Test
+    @Order(1)
+    void testCreatePOTD() {
+        assertNotNull(testPOTD);
+        assertNotNull(testPOTD.getId());
+        assertEquals("Test Title", testPOTD.getTitle());
+        assertEquals("test-title", testPOTD.getSlug());
+    }
+
+    @Test
+    @Order(2)
+    void testGetPOTDById() {
+        Optional<POTD> fetched = potdRepository.getPOTDById(testPOTD.getId());
+        assertTrue(fetched.isPresent());
+        assertTrue(Optional.of(testPOTD).equals(fetched));
+    }
+
+    @Test
+    @Order(3)
+    void testGetCurrentPOTD() {
+        Optional<POTD> current = potdRepository.getCurrentPOTD();
+        assertTrue(current.isPresent());
+        assertTrue(Optional.of(testPOTD).equals(current));
+    }
+
+    @Test
+    @Order(4)
+    void testGetAllPOTDS() {
+        List<POTD> all = potdRepository.getAllPOTDS();
+        assertFalse(all.isEmpty());
+        assertTrue(all.contains(testPOTD));
+    }
+
+    @Test
+    @Order(5)
+    void testUpdatePOTD() {
+        testPOTD.setTitle("Updated Title");
+        potdRepository.updatePOTD(testPOTD);
+        Optional<POTD> updated = potdRepository.getPOTDById(testPOTD.getId());
+        assertEquals("Updated Title", updated.get().getTitle());
+    }
+}

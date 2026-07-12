@@ -1,0 +1,51 @@
+package org.patinanetwork.codepulse.common.dto.question.topic;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.LocalDateTime;
+import java.util.Optional;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
+import lombok.extern.jackson.Jacksonized;
+import org.patinanetwork.codepulse.common.db.models.question.topic.LeetcodeTopicEnum;
+import org.patinanetwork.codepulse.common.db.models.question.topic.QuestionTopic;
+
+@Getter
+@Builder
+@Jacksonized
+@ToString
+@EqualsAndHashCode
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+public class QuestionTopicDto {
+
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+    private String id;
+
+    @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private Optional<String> questionId;
+
+    @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private Optional<String> questionBankId;
+
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+    private String topicSlug;
+
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+    private LeetcodeTopicEnum topic;
+
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+    private LocalDateTime createdAt;
+
+    public static QuestionTopicDto fromQuestionTopic(final QuestionTopic questionTopic) {
+        return QuestionTopicDto.builder()
+                .id(questionTopic.getId())
+                .questionId(questionTopic.getQuestionId())
+                .questionBankId(questionTopic.getQuestionBankId())
+                .topicSlug(questionTopic.getTopicSlug())
+                .topic(questionTopic.getTopic())
+                .createdAt(questionTopic.getCreatedAt())
+                .build();
+    }
+}

@@ -1,0 +1,343 @@
+package org.patinanetwork.codepulse.common.db.repos.question.questionbank;
+
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import javax.sql.DataSource;
+import org.patinanetwork.codepulse.common.db.helper.NamedPreparedStatement;
+import org.patinanetwork.codepulse.common.db.models.question.QuestionDifficulty;
+import org.patinanetwork.codepulse.common.db.models.question.bank.QuestionBank;
+import org.patinanetwork.codepulse.common.db.models.question.topic.LeetcodeTopicEnum;
+import org.patinanetwork.codepulse.common.db.repos.question.topic.QuestionTopicRepository;
+import org.patinanetwork.codepulse.common.time.StandardizedOffsetDateTime;
+import org.springframework.stereotype.Component;
+
+@Component
+public class QuestionBankSqlRepository implements QuestionBankRepository {
+
+    private final DataSource ds;
+    private final QuestionTopicRepository questionTopicRepository;
+
+    public QuestionBankSqlRepository(final DataSource ds, final QuestionTopicRepository questionTopicRepository) {
+        this.ds = ds;
+        this.questionTopicRepository = questionTopicRepository;
+    }
+
+    private QuestionBank mapResultSetToQuestion(final ResultSet rs) throws SQLException {
+        var questionBankId = rs.getString("id");
+        var questionSlug = rs.getString("questionSlug");
+        var questionDifficulty = QuestionDifficulty.valueOf(rs.getString("questionDifficulty"));
+        var questionNumber = rs.getInt("questionNumber");
+        var questionLink = rs.getString("questionLink");
+        var questionTitle = rs.getString("questionTitle");
+        var description = rs.getString("description");
+        var acceptanceRate = rs.getFloat("acceptanceRate");
+        var createdAt = StandardizedOffsetDateTime.normalize(rs.getObject("createdAt", OffsetDateTime.class));
+
+        return QuestionBank.builder()
+                .id(questionBankId)
+                .questionSlug(questionSlug)
+                .questionDifficulty(questionDifficulty)
+                .questionNumber(questionNumber)
+                .questionLink(questionLink)
+                .questionTitle(questionTitle)
+                .description(Optional.ofNullable(description))
+                .acceptanceRate(acceptanceRate)
+                .createdAt(createdAt)
+                .topics(questionTopicRepository.findQuestionTopicsByQuestionBankId(questionBankId))
+                .build();
+    }
+
+    @Override
+    public void createQuestion(final QuestionBank question) {
+        String sql = """
+                INSERT INTO "QuestionBank" (
+                    id,
+                    "questionSlug",
+                    "questionDifficulty",
+                    "questionNumber",
+                    "questionLink",
+                    "questionTitle",
+                    description,
+                    "acceptanceRate"
+                )
+                VALUES
+                    (:id, :slug, :difficulty, :number, :link, :title, :desc, :ac)
+            """;
+
+        question.setId(UUID.randomUUID().toString());
+
+        try (Connection conn = ds.getConnection();
+                NamedPreparedStatement stmt = new NamedPreparedStatement(conn, sql)) {
+            stmt.setString("id", question.getId());
+            stmt.setString("slug", question.getQuestionSlug());
+            stmt.setString("difficulty", question.getQuestionDifficulty().name());
+            stmt.setInt("number", question.getQuestionNumber());
+            stmt.setString("link", question.getQuestionLink());
+            stmt.setString("title", question.getQuestionTitle());
+            stmt.setString("desc", question.getDescription().orElse(null));
+            stmt.setObject("ac", question.getAcceptanceRate());
+
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to create question", e);
+        }
+    }
+
+    @Override
+    public Optional<QuestionBank> getQuestionById(final String id) {
+        String sql = """
+                SELECT
+                    id,
+                    "questionSlug",
+                    "questionDifficulty",
+                    "questionNumber",
+                    "questionLink",
+                    "questionTitle",
+                    description,
+                    "acceptanceRate",
+                    "createdAt"
+                FROM
+                    "QuestionBank"
+                WHERE
+                    id = :id
+            """;
+
+        try (Connection conn = ds.getConnection();
+                NamedPreparedStatement stmt = new NamedPreparedStatement(conn, sql)) {
+            stmt.setString("id", id);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(mapResultSetToQuestion(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to retrieve question", e);
+        }
+
+        return Optional.empty();
+    }
+
+    @Override
+    public Optional<QuestionBank> getQuestionBySlug(final String slug) {
+        String sql = """
+                SELECT
+                    id,
+                    "questionSlug",
+                    "questionDifficulty",
+                    "questionNumber",
+                    "questionLink",
+                    "questionTitle",
+                    description,
+                    "acceptanceRate",
+                    "createdAt"
+                FROM
+                    "QuestionBank"
+                WHERE
+                    "questionSlug" = :questionSlug
+                LIMIT 1
+            """;
+
+        try (Connection conn = ds.getConnection();
+                NamedPreparedStatement stmt = new NamedPreparedStatement(conn, sql)) {
+            stmt.setObject("questionSlug", slug);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(mapResultSetToQuestion(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to retrieve question", e);
+        }
+
+        return Optional.empty();
+    }
+
+    @Override
+    public boolean updateQuestion(final QuestionBank inputQuestion) {
+        String sql = """
+                UPDATE "QuestionBank"
+                SET
+                    "questionSlug" = :slug,
+                    "questionDifficulty" = :difficulty,
+                    "questionNumber" = :number,
+                    "questionLink" = :link,
+                    "questionTitle" = :title,
+                    description = :desc,
+                    "acceptanceRate" = :ac
+                WHERE
+                    id = :id
+            """;
+
+        try (Connection conn = ds.getConnection();
+                NamedPreparedStatement stmt = new NamedPreparedStatement(conn, sql)) {
+            stmt.setString("slug", inputQuestion.getQuestionSlug());
+            stmt.setString("difficulty", inputQuestion.getQuestionDifficulty().name());
+            stmt.setInt("number", inputQuestion.getQuestionNumber());
+            stmt.setString("link", inputQuestion.getQuestionLink());
+            stmt.setString("title", inputQuestion.getQuestionTitle());
+            stmt.setString("desc", inputQuestion.getDescription().orElse(null));
+            stmt.setObject("ac", inputQuestion.getAcceptanceRate());
+            stmt.setString("id", inputQuestion.getId());
+
+            int rowsAffected = stmt.executeUpdate();
+            return rowsAffected > 0;
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to update question", e);
+        }
+    }
+
+    @Override
+    public boolean deleteQuestionById(final String id) {
+        String sql = "DELETE FROM \"QuestionBank\" WHERE id=:id";
+
+        try (Connection conn = ds.getConnection();
+                NamedPreparedStatement stmt = new NamedPreparedStatement(conn, sql)) {
+            stmt.setString("id", id);
+            int rowsAffected = stmt.executeUpdate();
+
+            return rowsAffected > 0;
+        } catch (SQLException e) {
+            throw new RuntimeException("Error while deleting question", e);
+        }
+    }
+
+    @Override
+    public Optional<QuestionBank> getRandomQuestion() {
+        String sql = """
+                SELECT
+                    id,
+                    "questionSlug",
+                    "questionDifficulty",
+                    "questionNumber",
+                    "questionLink",
+                    "questionTitle",
+                    description,
+                    "acceptanceRate",
+                    "createdAt"
+                FROM
+                    "QuestionBank"
+                ORDER BY RANDOM()
+                LIMIT 1
+            """;
+
+        try (Connection conn = ds.getConnection();
+                NamedPreparedStatement stmt = new NamedPreparedStatement(conn, sql)) {
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(mapResultSetToQuestion(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to retrieve random question", e);
+        }
+
+        return Optional.empty();
+    }
+
+    @Override
+    public List<QuestionBank> getQuestionsByTopic(final LeetcodeTopicEnum topic) {
+        List<QuestionBank> questions = new ArrayList<>();
+        String sql = """
+                SELECT DISTINCT
+                    qb.id,
+                    qb."questionSlug",
+                    qb."questionDifficulty",
+                    qb."questionNumber",
+                    qb."questionLink",
+                    qb."questionTitle",
+                    qb.description,
+                    qb."acceptanceRate",
+                    qb."createdAt"
+                FROM
+                    "QuestionBank" qb
+                INNER JOIN
+                    "QuestionTopic" qt ON qb.id = qt."questionBankId"
+                WHERE
+                    qt.topic = :topic
+            """;
+
+        try (Connection conn = ds.getConnection();
+                NamedPreparedStatement stmt = new NamedPreparedStatement(conn, sql)) {
+            stmt.setString("topic", topic.getLeetcodeEnum());
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    questions.add(mapResultSetToQuestion(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to retrieve questions by topic", e);
+        }
+
+        return questions;
+    }
+
+    @Override
+    public List<QuestionBank> getQuestionsByDifficulty(final QuestionDifficulty difficulty) {
+        List<QuestionBank> questions = new ArrayList<>();
+        String sql = """
+                SELECT
+                    id,
+                    "questionSlug",
+                    "questionDifficulty",
+                    "questionNumber",
+                    "questionLink",
+                    "questionTitle",
+                    description,
+                    "acceptanceRate",
+                    "createdAt"
+                FROM
+                    "QuestionBank"
+                WHERE
+                    "questionDifficulty" = :difficulty
+            """;
+
+        try (Connection conn = ds.getConnection();
+                NamedPreparedStatement stmt = new NamedPreparedStatement(conn, sql)) {
+            stmt.setString("difficulty", difficulty.name());
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    questions.add(mapResultSetToQuestion(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to retrieve questions by difficulty", e);
+        }
+
+        return questions;
+    }
+
+    @Override
+    public List<QuestionBank> getAllQuestions() {
+        List<QuestionBank> questions = new ArrayList<>();
+        String sql = """
+                    SELECT
+                        id,
+                        "questionSlug",
+                        "questionDifficulty",
+                        "questionNumber",
+                        "questionLink",
+                        "questionTitle",
+                        description,
+                        "acceptanceRate",
+                        "createdAt"
+                    FROM "QuestionBank"
+            """;
+        try (Connection conn = ds.getConnection();
+                NamedPreparedStatement stmt = new NamedPreparedStatement(conn, sql)) {
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    questions.add(mapResultSetToQuestion(rs));
+                }
+                return questions;
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to retrieve all questions", e);
+        }
+    }
+}

@@ -1,0 +1,80 @@
+name: Slash Command Dispatch
+run-name: Slash Command Dispatch
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  slashCommandDispatch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get PR head SHA
+        id: pr-head
+        uses: actions/github-script@v8
+        with:
+          result-encoding: string
+          script: |
+            const prId = ${{ github.event.issue.number }};
+            const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: parseInt(prId, 10)
+            });
+             return pr.head.sha;
+
+      - name: Get branch
+        id: branch
+        uses: actions/github-script@v8
+        with:
+          result-encoding: string
+          script: |
+            const prId = ${{ github.event.issue.number }};
+            const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: parseInt(prId, 10)
+            });
+            return pr.head.ref;
+
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.pr-head.outputs.result }}
+
+      - name: Setup CI
+        uses: ./.github/composite/setup-ci
+        with:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Run script
+        run: bun run .github/scripts/load-slash-commands --get-gha-output=true
+        id: cmds
+
+      - name: Load secrets
+        uses: ./.github/composite/load-secrets
+        with:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          UNLOAD_ENVIRONMENTS: ci
+
+      - name: Slash Command Dispatch
+        uses: peter-evans/slash-command-dispatch@v4
+        with:
+          dispatch-type: workflow
+          token: ${{ env.GH_PAT }}
+          commands: |
+            ${{ steps.cmds.outputs.commands }}
+          static-args: |
+            repository=${{ github.repository }}
+            comment-id=${{ github.event.comment.id }}
+            prId=${{ github.event.issue.number }}
+            author=${{ github.actor }}
+            ref=${{ steps.branch.outputs.result }}

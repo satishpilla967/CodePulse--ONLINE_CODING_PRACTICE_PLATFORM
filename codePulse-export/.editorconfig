@@ -1,0 +1,17 @@
+root = true
+
+[*]
+indent_style = space
+indent_size = 4
+
+[*.{js,ts,tsx,jsx}]
+indent_style = space
+indent_size = 2
+
+[*.yml]
+indent_style = space
+indent_size = 2
+
+[Justfile]
+indent_style = space
+indent_size = 2

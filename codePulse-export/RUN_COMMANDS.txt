@@ -1,0 +1,83 @@
+CodePulse — Commands to Run the Project
+========================================
+
+QUICK START (one command, needs Docker)
+-----------------------------------------
+./dev.sh
+  - Copies example.env -> .env if missing
+  - Starts MySQL, Redis, Judge0 via docker compose
+  - Runs Flyway DB migrations
+  - Starts backend (Spring Boot, http://localhost:8080)
+  - Starts frontend (Vite, http://localhost:5173)
+  - Ctrl+C stops backend/frontend (containers keep running; `docker compose down` to stop them too)
+
+PREREQUISITES
+--------------
+- Docker / docker compose
+- Java + Maven wrapper (./mvnw included)
+- Node.js + pnpm
+- dotenvx (for the `just` recipes below)
+- just (command runner) — https://github.com/casey/just
+
+MANUAL / STEP-BY-STEP (using `just`)
+-------------------------------------
+# Start infra containers (MySQL, Redis, Judge0)
+docker compose up -d
+
+# Run DB migrations
+just migrate
+
+# Run backend only (Spring Boot dev profile)
+just backend-dev
+
+# Run backend with debugger on port 5005
+just backend-dev-debug
+
+# Run frontend only (Vite dev server)
+just frontend-dev
+
+# Run backend + frontend together
+just dev
+
+# Run backend + frontend together (backend with debugger)
+just devd
+
+INSTALL / BUILD
+-----------------
+just backend-install       # mvn install (skip tests)
+just frontend-install      # cd js && pnpm i
+
+TESTS & LINTING
+-----------------
+just backend-test          # spotless check + checkstyle + mvn verify (ci profile)
+just backend-spotless      # backend formatter check
+just backend-spotless-fix  # backend formatter fix
+just frontend-test         # cd js && pnpm run test
+
+OTHER USEFUL RECIPES
+-----------------------
+just type-gen               # generate TS types from OpenAPI
+just email-dev               # run react-email dev server (cd email && pnpm i && pnpm email dev)
+just email-gen                # generate email HTML into backend static folder
+just drop                     # drop local DB (careful)
+just migrate-stg              # migrate STAGING DB (careful)
+just migrate-prod             # migrate PRODUCTION DB (careful)
+just copy-stg                 # copy prod DB to staging (careful, destroys staging data)
+just git-crypt-add-user        # add a user's GPG key for git-crypt
+just git-crypt-generate-key    # generate your GPG key for git-crypt
+
+DIRECT (WITHOUT just)
+------------------------
+# Backend
+dotenvx run -f .env -f .env.shared -- ./mvnw -Dspring-boot.run.profiles=dev spring-boot:run
+
+# Frontend
+cd js && pnpm i && pnpm run dev
+
+# DB migration
+dotenvx run -- ./mvnw flyway:migrate -Dflyway.locations=filesystem:./db
+
+URLS (LOCAL DEV)
+------------------
+Backend:  http://localhost:8080
+Frontend: http://localhost:5173
